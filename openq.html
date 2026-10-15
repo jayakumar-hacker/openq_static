@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenQ - Hospital Queue Management</title>
+<style>
+  :root {
+    --bg: #eef3f1; --surface: #ffffff; --text: #12302b; --muted: #587069;
+    --line: #d3dfdb; --brand: #0b6b5c; --brand-ink: #ffffff;
+    --signal: #f2b01e; --signal-ink: #3a2a00; --danger: #c93a3a; --soft: #e3efeb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0c1a17; --surface: #13261f; --text: #e3f1ed; --muted: #8fb0a7;
+      --line: #25403a; --brand: #3fbfa8; --brand-ink: #062119;
+      --signal: #f2b01e; --signal-ink: #2a1e00; --danger: #ef6a6a; --soft: #1a332c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: "Segoe UI", system-ui, sans-serif; line-height: 1.45; }
+  header { background: var(--surface); border-bottom: 1px solid var(--line); padding: 12px 20px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+  .logo { font-size: 1.4rem; font-weight: 700; color: var(--brand); letter-spacing: -0.5px; }
+  .logo small { display: block; font-size: .75rem; font-weight: 400; color: var(--muted); letter-spacing: 0; }
+  nav { display: flex; gap: 4px; background: var(--soft); padding: 4px; border-radius: 10px; }
+  nav button { border: 0; background: transparent; color: var(--text); padding: 8px 16px; border-radius: 8px; font-size: .95rem; cursor: pointer; }
+  nav button[aria-selected="true"] { background: var(--brand); color: var(--brand-ink); }
+  .clock { font-variant-numeric: tabular-nums; color: var(--muted); }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; }
+  .stat b { display: block; font-size: 1.8rem; }
+  .stat span { color: var(--muted); font-size: .85rem; }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px; }
+  .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+  h2 { margin: 0 0 14px; font-size: 1.15rem; }
+  label { display: block; font-size: .85rem; color: var(--muted); margin: 12px 0 4px; }
+  input, select { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font-size: 1rem; }
+  button.primary, button.alt { padding: 10px 16px; border-radius: 8px; border: 1px solid transparent; font-size: 1rem; cursor: pointer; }
+  button.primary { background: var(--brand); color: var(--brand-ink); }
+  button.alt { background: transparent; border-color: var(--line); color: var(--text); }
+  button.danger { color: var(--danger); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid var(--signal); outline-offset: 2px; }
+  .full { width: 100%; margin-top: 18px; }
+  .ticket { margin-top: 18px; border: 2px dashed var(--brand); border-radius: 10px; padding: 16px; text-align: center; }
+  .ticket .num { font-size: 3rem; font-weight: 800; color: var(--brand); line-height: 1.1; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .row > * { flex: 1; }
+  .serving { background: var(--signal); color: var(--signal-ink); border-radius: 10px; padding: 18px; text-align: center; margin-bottom: 14px; }
+  .serving .num { font-size: 3.4rem; font-weight: 800; line-height: 1.1; }
+  .serving.idle { background: var(--soft); color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; }
+  td, th { text-align: left; padding: 8px 6px; border-top: 1px solid var(--line); font-size: .95rem; }
+  th { color: var(--muted); font-weight: 500; border-top: 0; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: .75rem; background: var(--soft); }
+  .tag.p0 { background: var(--danger); color: #fff; }
+  .tag.p1 { background: var(--signal); color: var(--signal-ink); }
+  .board { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .card h3 { margin: 0; padding: 10px 16px; background: var(--brand); color: var(--brand-ink); font-size: 1rem; display: flex; justify-content: space-between; }
+  .card .body { padding: 16px; }
+  .card .now { font-size: 3.2rem; font-weight: 800; color: var(--text); line-height: 1.1; }
+  .card .now.none { color: var(--muted); font-size: 1.4rem; padding: 14px 0; }
+  .next { margin-top: 10px; color: var(--muted); font-size: .9rem; }
+  .next b { color: var(--text); margin-right: 8px; }
+  .flash { animation: flash 1.2s ease-out 1; }
+  @keyframes flash { 0% { background: var(--signal); } 100% { background: transparent; } }
+  @media (prefers-reduced-motion: reduce) { .flash { animation: none; } }
+  .foot { text-align: center; color: var(--muted); font-size: .8rem; padding: 20px; }
+  .foot button { background: none; border: 0; color: var(--muted); text-decoration: underline; cursor: pointer; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">OpenQ<small>Hospital queue management</small></div>
+  <nav role="tablist" aria-label="Views">
+    <button role="tab" data-view="reception" aria-selected="true">Reception</button>
+    <button role="tab" data-view="counter" aria-selected="false">Counter</button>
+    <button role="tab" data-view="board" aria-selected="false">Waiting hall board</button>
+  </nav>
+  <div class="clock" id="clock"></div>
+</header>
+
+<main>
+  <div class="stats">
+    <div class="stat"><b id="sWaiting">0</b><span>Waiting now</span></div>
+    <div class="stat"><b id="sServing">0</b><span>Being served</span></div>
+    <div class="stat"><b id="sDone">0</b><span>Completed today</span></div>
+    <div class="stat"><b id="sAvg">0 min</b><span>Average consult time</span></div>
+  </div>
+
+  <!-- Reception -->
+  <section id="view-reception">
+    <div class="two">
+      <div class="panel">
+        <h2>Register patient</h2>
+        <form id="regForm">
+          <label for="pName">Patient name</label>
+          <input id="pName" required maxlength="60" autocomplete="off">
+          <label for="pDept">Department</label>
+          <select id="pDept"></select>
+          <label for="pPri">Priority</label>
+          <select id="pPri">
+            <option value="2">Normal</option>
+            <option value="1">Senior citizen / pregnant / disabled</option>
+            <option value="0">Emergency</option>
+          </select>
+          <button class="primary full" type="submit">Generate token</button>
+        </form>
+        <div class="ticket" id="ticket" hidden aria-live="polite">
+          <div>Your token</div>
+          <div class="num" id="tNum"></div>
+          <div id="tInfo"></div>
+          <button class="alt" style="margin-top:12px" onclick="window.print()">Print ticket</button>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Waiting list</h2>
+        <table>
+          <thead><tr><th>Token</th><th>Name</th><th>Dept</th><th>Priority</th><th>Wait</th></tr></thead>
+          <tbody id="waitBody"></tbody>
+        </table>
+        <p id="waitEmpty" style="color:var(--muted)" hidden>No patients are waiting.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Counter -->
+  <section id="view-counter" hidden>
+    <div class="two">
+      <div class="panel">
+        <h2>Doctor / counter console</h2>
+        <label for="cDept">Department</label>
+        <select id="cDept"></select>
+        <div style="margin-top:16px" class="serving idle" id="cServing"></div>
+        <div class="row">
+          <button class="primary" id="btnNext">Call next</button>
+          <button class="alt" id="btnDone">Mark complete</button>
+          <button class="alt danger" id="btnSkip">No-show</button>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Up next in this department</h2>
+        <table>
+          <thead><tr><th>Token</th><th>Name</th><th>Priority</th><th>Waiting</th></tr></thead>
+          <tbody id="cBody"></tbody>
+        </table>
+        <p id="cEmpty" style="color:var(--muted)" hidden>Queue is empty.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Board -->
+  <section id="view-board" hidden>
+    <div class="board" id="boardGrid"></div>
+  </section>
+</main>
+
+<div class="foot">Demo data is stored in this browser only. <button id="resetBtn">Reset demo data</button></div>
+
+<script>
+const DEPTS = [
+  { code: 'GEN', name: 'General Medicine' },
+  { code: 'CAR', name: 'Cardiology' },
+  { code: 'PED', name: 'Paediatrics' },
+  { code: 'ORT', name: 'Orthopaedics' },
+  { code: 'LAB', name: 'Laboratory' }
+];
+const PRI = { 0: 'Emergency', 1: 'Priority', 2: 'Normal' };
+const KEY = 'openq-state-v1';
+const DEFAULT_AVG = 8; // minutes, used until real data exists
+
+let state = load();
+let lastCalled = {};
+
+function load() {
+  try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.tokens) return s; } catch (e) {}
+  return seed();
+}
+function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+function seed() {
+  const now = Date.now(), m = 60000;
+  const mk = (n, d, name, p, ago) => ({ label: DEPTS[d].code + '-' + String(n).padStart(3, '0'), dept: DEPTS[d].code, name, pri: p, status: 'waiting', created: now - ago * m });
+  const tokens = [
+    mk(1, 0, 'Ravi Kumar', 2, 32), mk(2, 0, 'Meena S', 1, 25), mk(3, 0, 'Arun P', 2, 14),
+    mk(1, 1, 'Lakshmi N', 2, 28), mk(2, 1, 'Suresh B', 0, 6),
+    mk(1, 2, 'Baby Anika', 2, 18), mk(1, 3, 'Karthik R', 2, 11)
+  ];
+  tokens[0].status = 'serving'; tokens[0].called = now - 4 * m;
+  return { tokens, counters: { GEN: 3, CAR: 2, PED: 1, ORT: 1, LAB: 0 } };
+}
+
+const $ = id => document.getElementById(id);
+const deptName = c => DEPTS.find(d => d.code === c).name;
+const mins = ms => Math.max(0, Math.round(ms / 60000));
+function waitingOf(code) {
+  return state.tokens.filter(t => t.status === 'waiting' && t.dept === code)
+    .sort((a, b) => a.pri - b.pri || a.created - b.created);
+}
+function servingOf(code) { return state.tokens.find(t => t.status === 'serving' && t.dept === code); }
+function avgConsult() {
+  const d = state.tokens.filter(t => t.status === 'done' && t.called && t.finished);
+  if (!d.length) return DEFAULT_AVG;
+  return Math.max(1, Math.round(d.reduce((s, t) => s + (t.finished - t.called), 0) / d.length / 60000));
+}
+function el(tag, props, ...kids) {
+  const e = document.createElement(tag);
+  if (props) for (const k in props) { if (k === 'class') e.className = props[k]; else e[k] = props[k]; }
+  kids.forEach(k => e.append(k));
+  return e;
+}
+function priTag(p) { return el('span', { class: 'tag p' + p, textContent: PRI[p] }); }
+
+/* ---------- actions ---------- */
+function register(name, code, pri) {
+  state.counters[code] = (state.counters[code] || 0) + 1;
+  const t = { label: code + '-' + String(state.counters[code]).padStart(3, '0'), dept: code, name, pri, status: 'waiting', created: Date.now() };
+  state.tokens.push(t);
+  save();
+  return t;
+}
+function callNext(code) {
+  const cur = servingOf(code);
+  if (cur) { cur.status = 'done'; cur.finished = Date.now(); }
+  const next = waitingOf(code)[0];
+  if (next) { next.status = 'serving'; next.called = Date.now(); lastCalled[code] = next.label; }
+  save();
+}
+function finish(code, status) {
+  const cur = servingOf(code);
+  if (!cur) return;
+  cur.status = status; cur.finished = Date.now();
+  save();
+}
+
+/* ---------- render ---------- */
+function renderStats() {
+  const c = s => state.tokens.filter(t => t.status === s).length;
+  $('sWaiting').textContent = c('waiting');
+  $('sServing').textContent = c('serving');
+  $('sDone').textContent = c('done');
+  $('sAvg').textContent = avgConsult() + ' min';
+}
+function renderReception() {
+  const body = $('waitBody'); body.replaceChildren();
+  const all = state.tokens.filter(t => t.status === 'waiting')
+    .sort((a, b) => a.created - b.created);
+  all.forEach(t => body.append(el('tr', null,
+    el('td', { textContent: t.label }), el('td', { textContent: t.name }),
+    el('td', { textContent: deptName(t.dept) }), el('td', null, priTag(t.pri)),
+    el('td', { textContent: mins(Date.now() - t.created) + ' min' }))));
+  $('waitEmpty').hidden = all.length > 0;
+}
+function renderCounter() {
+  const code = $('cDept').value;
+  const cur = servingOf(code), q = waitingOf(code);
+  const box = $('cServing'); box.replaceChildren();
+  box.className = 'serving' + (cur ? '' : ' idle');
+  if (cur) {
+    box.append(el('div', { textContent: 'Now serving' }), el('div', { class: 'num', textContent: cur.label }), el('div', { textContent: cur.name }));
+  } else {
+    box.append(el('div', { textContent: 'No patient at the counter. Call the next token.' }));
+  }
+  $('btnNext').disabled = !q.length && !cur;
+  $('btnDone').disabled = !cur;
+  $('btnSkip').disabled = !cur;
+  const body = $('cBody'); body.replaceChildren();
+  q.forEach(t => body.append(el('tr', null,
+    el('td', { textContent: t.label }), el('td', { textContent: t.name }),
+    el('td', null, priTag(t.pri)), el('td', { textContent: mins(Date.now() - t.created) + ' min' }))));
+  $('cEmpty').hidden = q.length > 0;
+}
+function renderBoard() {
+  const g = $('boardGrid'); g.replaceChildren();
+  DEPTS.forEach(d => {
+    const cur = servingOf(d.code), q = waitingOf(d.code);
+    const now = el('div', { class: 'now' + (cur ? '' : ' none'), textContent: cur ? cur.label : 'Counter free' });
+    if (cur && lastCalled[d.code] === cur.label) { now.classList.add('flash'); lastCalled[d.code] = null; }
+    const next = el('div', { class: 'next' }, el('b', { textContent: 'Next' }),
+      document.createTextNode(q.slice(0, 3).map(t => t.label).join('   ') || 'No one waiting'));
+    g.append(el('div', { class: 'card' },
+      el('h3', null, el('span', { textContent: d.name }), el('span', { textContent: q.length + ' waiting' })),
+      el('div', { class: 'body' }, el('div', { textContent: 'Now serving', style: 'color:var(--muted);font-size:.85rem' }), now, next)));
+  });
+}
+function renderAll() {
+  renderStats(); renderReception(); renderCounter(); renderBoard();
+}
+
+/* ---------- wiring ---------- */
+[$('pDept'), $('cDept')].forEach(sel => DEPTS.forEach(d => sel.append(el('option', { value: d.code, textContent: d.name }))));
+
+document.querySelectorAll('nav button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('nav button').forEach(x => x.setAttribute('aria-selected', x === b));
+  ['reception', 'counter', 'board'].forEach(v => $('view-' + v).hidden = v !== b.dataset.view);
+  renderAll();
+}));
+
+$('regForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const name = $('pName').value.trim();
+  if (!name) return;
+  const code = $('pDept').value, pri = Number($('pPri').value);
+  const t = register(name, code, pri);
+  const ahead = waitingOf(code).findIndex(x => x === t) + (servingOf(code) ? 1 : 0);
+  $('tNum').textContent = t.label;
+  $('tInfo').textContent = name + ' - ' + deptName(code) + '. ' +
+    (ahead === 0 ? 'You are next.' : ahead + ' ahead of you, about ' + ahead * avgConsult() + ' min wait.');
+  $('ticket').hidden = false;
+  $('pName').value = '';
+  renderAll();
+});
+
+$('cDept').addEventListener('change', renderCounter);
+$('btnNext').addEventListener('click', () => { callNext($('cDept').value); renderAll(); });
+$('btnDone').addEventListener('click', () => { finish($('cDept').value, 'done'); renderAll(); });
+$('btnSkip').addEventListener('click', () => { finish($('cDept').value, 'noshow'); renderAll(); });
+$('resetBtn').addEventListener('click', () => { state = seed(); save(); $('ticket').hidden = true; renderAll(); });
+
+function tick() { $('clock').textContent = new Date().toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
+tick(); setInterval(tick, 1000);
+setInterval(renderAll, 15000);
+window.addEventListener('storage', () => { state = load(); renderAll(); }); // syncs board tab with counter tab
+renderAll();
+</script>
+</body>
+</html>
